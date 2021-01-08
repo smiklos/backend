@@ -77,6 +77,7 @@ object APIInfo {
   corsAnyOrigin:        Boolean,
   corsAllowCredentials: Boolean,
   corsMaxAge:           FiniteDuration,
+  cacheDuration:        FiniteDuration,
   maxHeaderLineLength:  Int Refined Positive,
   maxRequestLineLength: Int Refined Positive
 )

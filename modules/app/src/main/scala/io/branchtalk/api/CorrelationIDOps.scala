@@ -9,21 +9,21 @@ import org.http4s.util.{ CaseInsensitiveString => CIString }
 
 final class CorrelationIDOps[F[_]: Sync: MDC](implicit uuidGenerator: UUIDGenerator) {
 
-  def httpRoutes(service: HttpRoutes[F]): HttpRoutes[F] = Kleisli { req: Request[F] =>
+  def httpRoutes(service: HttpRoutes[F]): HttpRoutes[F] = Kleisli { request: Request[F] =>
     for {
-      correlationID <- req.headers.get(CorrelationIDOps.correlationIDHeader) match {
-        case None            => CorrelationID.generate[OptionT[F, *]]
-        case Some(cidHeader) => CorrelationID(cidHeader.value).pure[OptionT[F, *]]
+      correlationID <- request.headers.get(CorrelationIDOps.correlationIDHeader) match {
+        case None           => CorrelationID.generate[OptionT[F, *]]
+        case Some(idHeader) => CorrelationID(idHeader.value).pure[OptionT[F, *]]
       }
       _ <- correlationID.updateMDC[F].pipe(OptionT.liftF(_))
-      reqWithID = req.putHeaders(Header.Raw(CorrelationIDOps.correlationIDHeader, correlationID.show))
+      reqWithID = request.putHeaders(Header.Raw(CorrelationIDOps.correlationIDHeader, correlationID.show))
       response <- service(reqWithID)
     } yield response
   }
 }
 object CorrelationIDOps {
 
-  private val correlationIDHeader = CIString("X-Correlation-ID")
+  val correlationIDHeader: CIString = CIString("X-Correlation-ID")
 
   def apply[F[_]: Sync: MDC](implicit uuidGenerator: UUIDGenerator): CorrelationIDOps[F] = new CorrelationIDOps[F]
 }

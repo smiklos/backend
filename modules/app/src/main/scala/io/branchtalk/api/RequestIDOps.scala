@@ -11,20 +11,20 @@ final class RequestIDOps[F[_]: Sync: MDC] {
 
   // reuses RequestId.httpRoutes but adds logging and MDC setup to it
   def httpRoutes(service: HttpRoutes[F]): HttpRoutes[F] = RequestId.httpRoutes(
-    Kleisli { req: Request[F] =>
+    Kleisli { request: Request[F] =>
       for {
-        _ <- req.headers
-          .get(RequestIDOps.requestIdHeader)
+        _ <- request.headers
+          .get(RequestIDOps.requestIDHeader)
           .map(_.value.pipe(RequestID(_)))
           .traverse(_.updateMDC[F].pipe(OptionT.liftF(_)))
-        response <- service(req)
+        response <- service(request)
       } yield response
     }
   )
 }
 object RequestIDOps {
 
-  private val requestIdHeader = CIString("X-Request-ID")
+  val requestIDHeader: CIString = CIString("X-Request-ID")
 
   def apply[F[_]: Sync: MDC]: RequestIDOps[F] = new RequestIDOps[F]
 }

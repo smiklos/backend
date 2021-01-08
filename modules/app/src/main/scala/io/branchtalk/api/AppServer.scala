@@ -36,6 +36,7 @@ final class AppServer[F[_]: Concurrent: Timer: MDC](
   subscriptionServer:      SubscriptionServer[F],
   openAPIServer:           OpenAPIServer[F],
   metricsOps:              MetricsOps[F],
+  cachingOps:              CachingOps[F],
   correlationIDOps:        CorrelationIDOps[F],
   requestIDOps:            RequestIDOps[F],
   apiConfig:               APIConfig
@@ -49,14 +50,14 @@ final class AppServer[F[_]: Concurrent: Timer: MDC](
 
   private val logger = io.branchtalk.shared.model.Logger.getLogger[F]
 
-  private val logRoutes = Logger[F, F](
+  private val logRoutes: HttpApp[F] => HttpApp[F] = Logger[F, F](
     logHeaders = apiConfig.http.logHeaders,
     logBody = apiConfig.http.logBody,
     fk = FunctionK.id,
     logAction = ((s: String) => logger.info(s)).some
   )(_)
 
-  private val enableMDCPropagation: Http[F, F] => Http[F, F] = _.mapF(MDC[F].enable(_))
+  private val enableMDCPropagation: HttpApp[F] => HttpApp[F] = _.mapF(MDC[F].enable(_))
 
   val routes: HttpApp[F] =
     NonEmptyList
@@ -75,8 +76,9 @@ final class AppServer[F[_]: Concurrent: Timer: MDC](
       .pipe(CORS(_, corsConfig))
       .pipe(Metrics[F](metricsOps))
       .pipe(correlationIDOps.httpRoutes)
-      .pipe(requestIDOps.httpRoutes) // TODO: cache requests with the same X-Request-ID AND auth header
+      .pipe(requestIDOps.httpRoutes)
       .orNotFound
+      .pipe(cachingOps.http)
       .pipe(logRoutes)
       .pipe(enableMDCPropagation)
 }
@@ -95,6 +97,8 @@ object AppServer {
     discussionsWrites:      DiscussionsWrites[F]
   )(implicit uuidGenerator: UUIDGenerator): Resource[F, Server[F]] =
     Prometheus.metricsOps[F](registry, "server").flatMap { metricsOps =>
+      val cachingOps: CachingOps[F] = CachingOps[F](apiConfig)
+
       val correlationIDOps: CorrelationIDOps[F] = CorrelationIDOps[F]
 
       val requestIDOps: RequestIDOps[F] = RequestIDOps[F]
